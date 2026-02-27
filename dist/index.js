@@ -23,9 +23,10 @@ async function main() {
     const url = process.env.REDIS_URL;
     if (!url?.trim()) {
         failValidation("REDIS_URL no definida.", "Variable de entorno obligatoria para conectar a Redis.", [
-            "Define REDIS_URL: export REDIS_URL=redis://localhost:6379",
-            "Con Docker: levanta Redis con docker run -d -p 6379:6379 redis:alpine",
-            "Desde el repo: docker compose up -d redis_db y usa REDIS_URL=redis://redis_db:6379 en el servicio MCP.",
+            "Define REDIS_URL en tu entorno o en .cursor/mcp.json (mcpServers.mcp-memory-server.env.REDIS_URL). Ejemplo: redis://localhost:6379",
+            "Si usas el docker-compose de este repo: desde la raíz ejecuta: docker compose -f personal-mcps/docker-compose.yml up -d redis_db",
+            "O desde la carpeta personal-mcps/: docker compose up -d redis_db",
+            "Alternativa sin docker-compose: docker run -d -p 6379:6379 redis:alpine y usa REDIS_URL=redis://localhost:6379",
         ]);
     }
     let redis;
@@ -40,15 +41,16 @@ async function main() {
         ]);
     }
     try {
+        console.log(`[MCP: ${MCP_NAME}] Usando REDIS_URL=${url}. Configurable en .cursor/mcp.json → mcpServers.mcp-memory-server.env.REDIS_URL`);
         await redis.ping();
     }
     catch (err) {
         redis.disconnect();
         const msg = err instanceof Error ? err.message : String(err);
         failValidation("Redis no está disponible (ping falló).", msg, [
-            "Inicia Redis en local: docker run -d -p 6379:6379 redis:alpine",
-            "O con docker-compose desde la raíz: docker compose up -d redis_db",
-            "Comprueba que el puerto 6379 esté libre y que REDIS_URL coincida (localhost vs redis_db según dónde corra el MCP).",
+            "Inicia Redis en local: docker run -d -p 6379:6379 redis:alpine (entonces usa REDIS_URL=redis://localhost:6379).",
+            "Si usas el docker-compose de este repo: desde la raíz ejecuta docker compose -f personal-mcps/docker-compose.yml up -d redis_db o desde personal-mcps/: docker compose up -d redis_db.",
+            "Comprueba que el puerto 6379 esté libre y que REDIS_URL coincida (si el MCP corre en tu host vía Cursor, normalmente redis://localhost:6379).",
         ]);
     }
     const ports = {
