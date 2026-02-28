@@ -13,6 +13,17 @@ import { semanticConfig } from "../../config.js";
 import { buildChannelName } from "../../keys.js";
 import * as schemas from "./schemas.js";
 
+const DESCRIPTION_DOC = "TOOL_DESCRIPTION_CONVENTION.md";
+
+function requireToolDescription(
+  name: string,
+  config: { description?: string; inputSchema: unknown }
+): void {
+  if (typeof config.description !== "string" || !config.description.trim()) {
+    throw new Error(`Tool ${name}: description is required (${DESCRIPTION_DOC}).`);
+  }
+}
+
 function wrapToolHandler<TArgs, TResult extends ToolResult>(
   handler: (args: TArgs) => TResult | Promise<TResult>
 ) {
@@ -40,187 +51,224 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   const { contextual, semantic, scratchpad, events } = ports;
   const semConfig = { vectorDim: semanticConfig.vectorDim };
 
-  server.registerTool(
-    "get_recent_context",
-    {
-      description: "Devuelve las últimas N entradas de la bitácora del agente para hidratar contexto. Parámetros: agent_key (identificador del agente), limit (opcional, por defecto 5). Usar al iniciar un subagente para recuperar memoria reciente.",
+  {
+    const config = {
+      description: "Returns the last N entries from the agent's log for context hydration. Args: agent_key (required), limit (optional, default 5). Use when starting a subagent to recover recent memory.",
       inputSchema: schemas.getRecentContextSchema,
-    },
-    wrapToolHandler((args) =>
-      contextualApp.getRecentContext(
-        contextual,
-        args.agent_key,
-        args.limit
+    };
+    requireToolDescription("get_recent_context", config);
+    server.registerTool(
+      "get_recent_context",
+      config,
+      wrapToolHandler((args) =>
+        contextualApp.getRecentContext(
+          contextual,
+          args.agent_key,
+          args.limit
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "append_contextual_memory",
-    {
-      description: "Registra un nuevo hito o paso en la bitácora del agente. Parámetros: agent_key (ej. MM/DD/YYYY-clase), new_entry (texto del paso). Usar al finalizar un subagente (agent_key = MM/DD/YYYY-clase) o por el orquestador al cierre del flujo (agent_key del flujo, ej. trymellon-orchestrator) para que otros agentes o sesiones recuperen el contexto.",
+    );
+  }
+  {
+    const config = {
+      description: "Appends a step or milestone to the agent's log. Args: agent_key (e.g. MM/DD/YYYY-class), new_entry (text). Use when a subagent finishes (agent_key = MM/DD/YYYY-class) or when the orchestrator closes the flow (e.g. trymellon-orchestrator) so other agents can recover context.",
       inputSchema: schemas.appendContextualMemorySchema,
-    },
-    wrapToolHandler((args) =>
-      contextualApp.appendContextualMemory(
-        contextual,
-        args.agent_key,
-        args.new_entry
+    };
+    requireToolDescription("append_contextual_memory", config);
+    server.registerTool(
+      "append_contextual_memory",
+      config,
+      wrapToolHandler((args) =>
+        contextualApp.appendContextualMemory(
+          contextual,
+          args.agent_key,
+          args.new_entry
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "get_all_context",
-    {
-      description: "Devuelve todo el historial de la bitácora del agente. Parámetro: agent_key. Usar para reportes del orquestador o antes de un rollup.",
+    );
+  }
+  {
+    const config = {
+      description: "Returns the full log history for an agent. Args: agent_key (required). Use for orchestrator reports or before calling rollup_memory_segment.",
       inputSchema: schemas.getAllContextSchema,
-    },
-    wrapToolHandler((args) =>
-      contextualApp.getAllContext(contextual, args.agent_key)
-    )
-  );
-
-  server.registerTool(
-    "append_semantic_memory",
-    {
-      description: "Guarda un recuerdo con embedding para búsqueda semántica posterior. Parámetros: agent_key, embedding (vector), content, metadata (opcional). Requiere Redis Stack con módulo vector.",
+    };
+    requireToolDescription("get_all_context", config);
+    server.registerTool(
+      "get_all_context",
+      config,
+      wrapToolHandler((args) =>
+        contextualApp.getAllContext(contextual, args.agent_key)
+      )
+    );
+  }
+  {
+    const config = {
+      description: "Stores a memory with an embedding for later semantic search. Args: agent_key, embedding (vector), content, metadata (optional). Requires Redis Stack with vector module.",
       inputSchema: schemas.appendSemanticMemorySchema,
-    },
-    wrapToolHandler((args) =>
-      semanticApp.appendSemanticMemory(
-        semantic,
-        semConfig,
-        args.agent_key,
-        args.embedding,
-        args.content,
-        args.metadata
+    };
+    requireToolDescription("append_semantic_memory", config);
+    server.registerTool(
+      "append_semantic_memory",
+      config,
+      wrapToolHandler((args) =>
+        semanticApp.appendSemanticMemory(
+          semantic,
+          semConfig,
+          args.agent_key,
+          args.embedding,
+          args.content,
+          args.metadata
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "search_semantic_memory",
-    {
-      description: "Busca recuerdos almacenados por similitud de embedding. Parámetros: agent_key, embedding, top_k (opcional), score_threshold (opcional). Requiere Redis Stack.",
+    );
+  }
+  {
+    const config = {
+      description: "Searches stored memories by embedding similarity. Args: agent_key, embedding (required), top_k (optional), score_threshold (optional). Requires Redis Stack.",
       inputSchema: schemas.searchSemanticMemorySchema,
-    },
-    wrapToolHandler((args) =>
-      semanticApp.searchSemanticMemory(
-        semantic,
-        semConfig,
-        args.agent_key,
-        args.embedding,
-        args.top_k,
-        args.score_threshold
+    };
+    requireToolDescription("search_semantic_memory", config);
+    server.registerTool(
+      "search_semantic_memory",
+      config,
+      wrapToolHandler((args) =>
+        semanticApp.searchSemanticMemory(
+          semantic,
+          semConfig,
+          args.agent_key,
+          args.embedding,
+          args.top_k,
+          args.score_threshold
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "get_memory_stats",
-    {
-      description: "Devuelve estadísticas de la bitácora del agente: número de entradas y timestamps primera/última. Parámetro: agent_key. Usar para decidir si ejecutar rollup_memory_segment.",
+    );
+  }
+  {
+    const config = {
+      description: "Returns log stats for an agent: entry count and first/last timestamps. Args: agent_key (required). Use to decide whether to call rollup_memory_segment.",
       inputSchema: schemas.getMemoryStatsSchema,
-    },
-    wrapToolHandler((args) =>
-      contextualApp.getMemoryStats(contextual, args.agent_key)
-    )
-  );
-
-  server.registerTool(
-    "rollup_memory_segment",
-    {
-      description: "Consolida entradas antiguas en un único ítem de resumen y mantiene las keep_last más recientes. Parámetros: agent_key, summary_entry, keep_last (opcional, default 20, máx 500). Reduce ruido en bitácoras largas.",
+    };
+    requireToolDescription("get_memory_stats", config);
+    server.registerTool(
+      "get_memory_stats",
+      config,
+      wrapToolHandler((args) =>
+        contextualApp.getMemoryStats(contextual, args.agent_key)
+      )
+    );
+  }
+  {
+    const config = {
+      description: "Rolls up old log entries into one summary entry; keeps the most recent keep_last entries. Args: agent_key, summary_entry (required), keep_last (optional, default 20, max 500). Use when the log is too long.",
       inputSchema: schemas.rollupMemorySegmentSchema,
-    },
-    wrapToolHandler((args) =>
-      contextualApp.rollupMemorySegment(
-        contextual,
-        args.agent_key,
-        args.keep_last,
-        args.summary_entry
+    };
+    requireToolDescription("rollup_memory_segment", config);
+    server.registerTool(
+      "rollup_memory_segment",
+      config,
+      wrapToolHandler((args) =>
+        contextualApp.rollupMemorySegment(
+          contextual,
+          args.agent_key,
+          args.keep_last,
+          args.summary_entry
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "set_scratchpad_entry",
-    {
-      description: "Guarda un valor temporal por agente y nombre, con TTL en segundos (Redis borra al expirar). Parámetros: agent_key, name, value, ttl_seconds (opcional, default desde config). Útil para handoffs entre agentes. En cierre de flujo orquestado: name tipo session-{session_id}, value = resumen + enlaces; ttl_seconds según necesidad (ej. 86400).",
+    );
+  }
+  {
+    const config = {
+      description: "Stores a temporary value by agent and name; Redis deletes it after TTL seconds. Args: agent_key, name, value, ttl_seconds (optional). Use for handoffs. At flow close: name like session-{session_id}, value = summary + links, ttl_seconds e.g. 86400.",
       inputSchema: schemas.setScratchpadEntrySchema,
-    },
-    wrapToolHandler((args) =>
-      scratchpadApp.setScratchpadEntry(
-        scratchpad,
-        args.agent_key,
-        args.name,
-        args.value,
-        args.ttl_seconds
+    };
+    requireToolDescription("set_scratchpad_entry", config);
+    server.registerTool(
+      "set_scratchpad_entry",
+      config,
+      wrapToolHandler((args) =>
+        scratchpadApp.setScratchpadEntry(
+          scratchpad,
+          args.agent_key,
+          args.name,
+          args.value,
+          args.ttl_seconds
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "get_scratchpad_entry",
-    {
-      description: "Lee un valor temporal previamente guardado con set_scratchpad_entry. Parámetros: agent_key, name. Devuelve null si no existe o expiró.",
+    );
+  }
+  {
+    const config = {
+      description: "Reads a value previously stored with set_scratchpad_entry. Args: agent_key, name (required). Returns null if missing or expired.",
       inputSchema: schemas.getScratchpadEntrySchema,
-    },
-    wrapToolHandler((args) =>
-      scratchpadApp.getScratchpadEntry(
-        scratchpad,
-        args.agent_key,
-        args.name
+    };
+    requireToolDescription("get_scratchpad_entry", config);
+    server.registerTool(
+      "get_scratchpad_entry",
+      config,
+      wrapToolHandler((args) =>
+        scratchpadApp.getScratchpadEntry(
+          scratchpad,
+          args.agent_key,
+          args.name
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "clear_scratchpad_entry",
-    {
-      description: "Elimina una entrada del scratchpad antes de que expire el TTL. Parámetros: agent_key, name. Útil al cerrar un flujo.",
+    );
+  }
+  {
+    const config = {
+      description: "Deletes a scratchpad entry before TTL expiry. Args: agent_key, name (required). Use when closing a flow.",
       inputSchema: schemas.clearScratchpadEntrySchema,
-    },
-    wrapToolHandler((args) =>
-      scratchpadApp.clearScratchpadEntry(
-        scratchpad,
-        args.agent_key,
-        args.name
+    };
+    requireToolDescription("clear_scratchpad_entry", config);
+    server.registerTool(
+      "clear_scratchpad_entry",
+      config,
+      wrapToolHandler((args) =>
+        scratchpadApp.clearScratchpadEntry(
+          scratchpad,
+          args.agent_key,
+          args.name
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "publish_interagent_message",
-    {
-      description: "Publica un mensaje en un canal (Pub/Sub). Parámetros: channel, sender_agent_key, payload. Los agentes que lean get_channel_log verán el mensaje. Coordinación ligera entre agentes.",
+    );
+  }
+  {
+    const config = {
+      description: "Publishes a message to a channel (Pub/Sub). Args: channel, sender_agent_key, payload (required). Subscribers read it via get_channel_log. Use for light coordination between agents.",
       inputSchema: schemas.publishInteragentMessageSchema,
-    },
-    wrapToolHandler((args) =>
-      eventsApp.publishInteragentMessage(
-        events,
-        buildChannelName(args.channel),
-        args.sender_agent_key,
-        args.payload
+    };
+    requireToolDescription("publish_interagent_message", config);
+    server.registerTool(
+      "publish_interagent_message",
+      config,
+      wrapToolHandler((args) =>
+        eventsApp.publishInteragentMessage(
+          events,
+          buildChannelName(args.channel),
+          args.sender_agent_key,
+          args.payload
+        )
       )
-    )
-  );
-
-  server.registerTool(
-    "get_channel_log",
-    {
-      description: "Lee los últimos mensajes publicados en un canal (Pub/Sub). Parámetros: channel, limit (opcional). Complementa publish_interagent_message para coordinación entre agentes.",
+    );
+  }
+  {
+    const config = {
+      description: "Returns the latest messages published to a channel. Args: channel (required), limit (optional). Pair with publish_interagent_message for agent coordination.",
       inputSchema: schemas.getChannelLogSchema,
-    },
-    wrapToolHandler((args) =>
-      eventsApp.getChannelLog(
-        events,
-        buildChannelName(args.channel),
-        args.limit
+    };
+    requireToolDescription("get_channel_log", config);
+    server.registerTool(
+      "get_channel_log",
+      config,
+      wrapToolHandler((args) =>
+        eventsApp.getChannelLog(
+          events,
+          buildChannelName(args.channel),
+          args.limit
+        )
       )
-    )
-  );
+    );
+  }
 }
 
 const MEMORY_MCP_VERSION = "1.0.0";
