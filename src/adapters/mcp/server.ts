@@ -43,7 +43,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "get_recent_context",
     {
-      description: "Devuelve las últimas N entradas de la bitácora del agente (hidratación). Por defecto 5.",
+      description: "Devuelve las últimas N entradas de la bitácora del agente para hidratar contexto. Parámetros: agent_key (identificador del agente), limit (opcional, por defecto 5). Usar al iniciar un subagente para recuperar memoria reciente.",
       inputSchema: schemas.getRecentContextSchema,
     },
     wrapToolHandler((args) =>
@@ -58,7 +58,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "append_contextual_memory",
     {
-      description: "Registra un nuevo hito o paso en la bitácora del agente (agent_key + new_entry).",
+      description: "Registra un nuevo hito o paso en la bitácora del agente. Parámetros: agent_key (ej. MM/DD/YYYY-clase), new_entry (texto del paso). Usar al finalizar un subagente (agent_key = MM/DD/YYYY-clase) o por el orquestador al cierre del flujo (agent_key del flujo, ej. trymellon-orchestrator) para que otros agentes o sesiones recuperen el contexto.",
       inputSchema: schemas.appendContextualMemorySchema,
     },
     wrapToolHandler((args) =>
@@ -73,7 +73,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "get_all_context",
     {
-      description: "Devuelve todo el historial del agente para el orquestador (resumen, reporte).",
+      description: "Devuelve todo el historial de la bitácora del agente. Parámetro: agent_key. Usar para reportes del orquestador o antes de un rollup.",
       inputSchema: schemas.getAllContextSchema,
     },
     wrapToolHandler((args) =>
@@ -84,7 +84,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "append_semantic_memory",
     {
-      description: "Guarda un recuerdo con embedding para búsqueda por similitud (requiere Redis Stack).",
+      description: "Guarda un recuerdo con embedding para búsqueda semántica posterior. Parámetros: agent_key, embedding (vector), content, metadata (opcional). Requiere Redis Stack con módulo vector.",
       inputSchema: schemas.appendSemanticMemorySchema,
     },
     wrapToolHandler((args) =>
@@ -102,7 +102,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "search_semantic_memory",
     {
-      description: "Busca recuerdos similares por vector.",
+      description: "Busca recuerdos almacenados por similitud de embedding. Parámetros: agent_key, embedding, top_k (opcional), score_threshold (opcional). Requiere Redis Stack.",
       inputSchema: schemas.searchSemanticMemorySchema,
     },
     wrapToolHandler((args) =>
@@ -120,7 +120,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "get_memory_stats",
     {
-      description: "Devuelve cantidad de entradas y timestamps primera/última para decidir rollup.",
+      description: "Devuelve estadísticas de la bitácora del agente: número de entradas y timestamps primera/última. Parámetro: agent_key. Usar para decidir si ejecutar rollup_memory_segment.",
       inputSchema: schemas.getMemoryStatsSchema,
     },
     wrapToolHandler((args) =>
@@ -131,7 +131,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "rollup_memory_segment",
     {
-      description: "Reemplaza entradas antiguas por un único ítem [RESUMEN HISTÓRICO]; conserva los keep_last más recientes.",
+      description: "Consolida entradas antiguas en un único ítem de resumen y mantiene las keep_last más recientes. Parámetros: agent_key, summary_entry, keep_last (opcional, default 20, máx 500). Reduce ruido en bitácoras largas.",
       inputSchema: schemas.rollupMemorySegmentSchema,
     },
     wrapToolHandler((args) =>
@@ -147,7 +147,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "set_scratchpad_entry",
     {
-      description: "Guarda un valor temporal con TTL (ej. 1h). Redis lo borra automáticamente.",
+      description: "Guarda un valor temporal por agente y nombre, con TTL en segundos (Redis borra al expirar). Parámetros: agent_key, name, value, ttl_seconds (opcional, default desde config). Útil para handoffs entre agentes. En cierre de flujo orquestado: name tipo session-{session_id}, value = resumen + enlaces; ttl_seconds según necesidad (ej. 86400).",
       inputSchema: schemas.setScratchpadEntrySchema,
     },
     wrapToolHandler((args) =>
@@ -164,7 +164,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "get_scratchpad_entry",
     {
-      description: "Lee un scratchpad por agent_key y name.",
+      description: "Lee un valor temporal previamente guardado con set_scratchpad_entry. Parámetros: agent_key, name. Devuelve null si no existe o expiró.",
       inputSchema: schemas.getScratchpadEntrySchema,
     },
     wrapToolHandler((args) =>
@@ -179,7 +179,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "clear_scratchpad_entry",
     {
-      description: "Borra un scratchpad antes de que expire el TTL.",
+      description: "Elimina una entrada del scratchpad antes de que expire el TTL. Parámetros: agent_key, name. Útil al cerrar un flujo.",
       inputSchema: schemas.clearScratchpadEntrySchema,
     },
     wrapToolHandler((args) =>
@@ -194,7 +194,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "publish_interagent_message",
     {
-      description: "Publica un mensaje en un canal (Pub/Sub). Otros agentes suscritos lo reciben.",
+      description: "Publica un mensaje en un canal (Pub/Sub). Parámetros: channel, sender_agent_key, payload. Los agentes que lean get_channel_log verán el mensaje. Coordinación ligera entre agentes.",
       inputSchema: schemas.publishInteragentMessageSchema,
     },
     wrapToolHandler((args) =>
@@ -210,7 +210,7 @@ export function registerMemoryModuleTools(server: McpServer, ports: ServerPorts)
   server.registerTool(
     "get_channel_log",
     {
-      description: "Lee los últimos mensajes del log de un canal.",
+      description: "Lee los últimos mensajes publicados en un canal (Pub/Sub). Parámetros: channel, limit (opcional). Complementa publish_interagent_message para coordinación entre agentes.",
       inputSchema: schemas.getChannelLogSchema,
     },
     wrapToolHandler((args) =>
