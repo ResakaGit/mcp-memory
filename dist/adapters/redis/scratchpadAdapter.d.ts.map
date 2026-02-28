@@ -1,1 +1,0 @@
-{"version":3,"file":"scratchpadAdapter.d.ts","sourceRoot":"","sources":["../../../src/adapters/redis/scratchpadAdapter.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,aAAa,CAAC;AAC/C,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,2BAA2B,CAAC;AAGhE,wBAAgB,uBAAuB,CAAC,KAAK,EAAE,WAAW,GAAG,cAAc,CAY1E"}
